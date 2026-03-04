@@ -1,0 +1,51 @@
+USEARCH commands for ITS on linux
+
+## you can change the error threshold (this is the 'predicted error' whatever that means) to 2% or 3% using the fasq_maxee, default is 1%.
+
+worsi@wla156:~/Svalbard_ITS$ for fq in *.fastq; do    ./usearch -fastq_filter $fq -fastq_maxee 1.0 -relabel @ -fastaout $fq.labeled.fa; done
+
+worsi@wla156:~/Svalbard_ITS$ for fq in *.fastq; do   ./usearch -fastq_filter $fq -fastq_maxee 1.0 -relabel Filt -fastaout $fq.filtered.fa; done
+
+worsi@wla156:~/Svalbard_ITS$ cat *.labeled.fa > labeled.fa
+
+worsi@wla156:~/Svalbard_ITS$ cat *.filtered.fa > filtered.fa
+
+worsi@wla156:~/Svalbard_ITS$ ./usearch -fastx_uniques filtered.fa -relabel Uniq -sizeout -fastaout uniques.fa
+
+##RUN THE DEFAULT, ALWAYS CLUSTERS at 97% not possible to change.  Chimera checking included
+
+./usearch -cluster_otus uniques.fa -minsize 2 -otus otus.fa -relabel Otu
+
+###CLUSTER AT A DIFFERENT LEVEL, USER DEFINED, NO CHIMERA CHECKING
+
+worsi@wla156:~/Svalbard_ITS$ ./usearch -cluster_fast uniques.fa -minsize 4 -centroids otus.fa -relabel Otu -id 0.95
+
+## make the OTU table, if using cluster_fast then update the -id to match the threshold
+
+worsi@wla156:~/Svalbard_ITS$ ./usearch -usearch_global labeled.fa -db otus.fa -strand plus -id 0.97 -otutabout otutab.txt -biomout otutab.json
+
+
+#### The commands up until this point make an OTU table with no taxonomy.  Run BLASTn of the OTU sequences (output from USEARCH) against the RefSeq+UNITE database that Bill has already prepared (UNITE_and_RefSeq_BLASTdb).
+
+ blastn -db ../../../../BLAST_databases/UNITE_and_RefSeq_combined/UNITE_and_RefSeq_BLASTdb -query ../otus.fa -out Svalbard_ITS_all3runscombined_BLASTn_UNITE_and_RefSeq_RESULTS.txt -outfmt 6 -max_target_seqs 1
+
+####Use the following script to add taxonomy from the BLASTn results against the RefSeq+UNITE databases
+
+
+Get_UNITE_taxonomy_from_BLASTn_result_IDs.pl  UNITE_and_RefSeq_taxonomy_combined.txt BLASTn_results.txt >output_BLASTn_taxonomy_hits.txt
+
+
+#####  Copy Paste the OtuID and taxonomy columns of the output_BLASTn_taxonomy_hits.txt file into the first two columns of the OTU table, and label them #OTU_ID and taxonomy, then run align_PR2_taxonomies_in_OTUtable.py to align fungi taxonomy with the OTU ids.  you have to do this because there are more OTUs in the table than BLAST hits in the taxonomy matching.
+
+
+(base) worsi@wla156:~/Svalbard_ITS_2024/K8-40m-hot-ITS/demultiplexed_on_sequencer_31072025_combined_w_3percerror_firsttry/fastq> python align_PR2_taxonomies_in_OTUtable.py -in otutab.txt -out otutable_taxonomy_aligned.txt 
+
+
+
+
+#### ALTERNATIVE!  ###
+
+##  Make a BLAST referenced OTU table, by Running the script blast_to_matrix.  This bins the OTUs according to their best top blast hit, it is a reference based approach and can result in capturing more sequences compared to the OTU approach.  The input is the labeled.fa file.
+
+../../../../blast_to_matrix_for_ITS.py -i labeled_BLASTn_results.txt -t ../../../../BLAST_databases/UNITE_and_RefSeq_combined/UNITE_and_RefSeq_taxonomy_combined_tab.txt -o labeled_blastn_fungi_matrix.tab
+
